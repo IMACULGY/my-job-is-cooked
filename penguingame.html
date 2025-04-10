@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Penguin Waddle Multiplayer Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      height: 100vh;
+      background: url('https://static.wikia.nocookie.net/club-penguin-rewritten/images/a/a8/Town_Stadium.png') center center / cover no-repeat;
+      cursor: crosshair;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #gameContainer {
+      position: relative;
+      flex: 1;
+    }
+
+    .penguin {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background-image: url('https://static.wikia.nocookie.net/club-penguin-rewritten/images/b/b1/Black_PC.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      transform: translate(-50%, -50%);
+    }
+
+    .nameTag {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: sans-serif;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .speechBubble {
+      position: absolute;
+      border-radius: 10px;
+      padding: 8px 12px;
+      top: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-family: sans-serif;
+      font-size: 14px;
+      display: none;
+      background: white;
+      border: 2px solid black;
+    }
+
+    #bannedOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: orange;
+      color: white;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      font-family: sans-serif;
+      font-size: 48px;
+      font-weight: bold;
+      z-index: 9999;
+    }
+
+    #chatBar {
+      display: flex;
+      padding: 10px;
+      background: #fff;
+      border-top: 2px solid #ccc;
+    }
+
+    #chatInput {
+      flex: 1;
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    #sendButton, #danceButton {
+      padding: 8px 16px;
+      margin-left: 8px;
+      font-size: 16px;
+      border: none;
+      background: #4caf50;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #sendButton:hover, #danceButton:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer"></div>
+
+  <div id="chatBar">
+    <input type="text" id="chatInput" placeholder="Say something..." />
+    <button id="sendButton">Send</button>
+    <button id="danceButton">Dance</button>
+  </div>
+
+  <div id="bannedOverlay">YOU HAVE BEEN BANNED</div>
+
+  <audio id="laughTrack" src="https://www.soundjay.com/human/laugh-8.mp3" preload="auto"></audio>
+
+  <script>
+    const gameContainer = document.getElementById('gameContainer');
+    const chatInput = document.getElementById('chatInput');
+    const sendButton = document.getElementById('sendButton');
+    const danceButton = document.getElementById('danceButton');
+    const bannedOverlay = document.getElementById('bannedOverlay');
+    const laughTrack = document.getElementById('laughTrack');
+
+    const normalPenguin = "url('https://static.wikia.nocookie.net/club-penguin-rewritten/images/b/b1/Black_PC.png')";
+    const dancingPenguin = "url('https://media.tenor.com/wuyEcsxrvQwAAAAM/club-penguin-ghosthy.gif')";
+    const swearWords = ['fuck', 'shit', 'bitch', 'fart', 'fortnite'];
+
+    let isBanned = false;
+    let clientId = null;
+    const penguins = {};
+
+    const ws = new WebSocket('wss://vibe-coding-adventures.onrender.com');
+
+    ws.onmessage = (message) => {
+      const data = JSON.parse(message.data);
+
+      if (data.type === 'init') {
+        clientId = data.id;
+      }
+
+      if (data.type === 'state') {
+        updatePenguins(data.players);
+      }
+
+      if (data.type === 'banned' && data.id === clientId) {
+        showBanned();
+      }
+    };
+
+    function updatePenguins(players) {
+      const containerWidth = gameContainer.clientWidth;
+      const containerHeight = gameContainer.clientHeight;
+
+      for (const id in players) {
+        let penguin = penguins[id];
+        if (!penguin) {
+          penguin = document.createElement('div');
+          penguin.className = 'penguin';
+          penguin.innerHTML = '<div class="nameTag"></div><div class="speechBubble"></div>';
+          penguin.currentX = players[id].x * containerWidth;
+          penguin.currentY = players[id].y * containerHeight;
+          penguin.targetX = players[id].x * containerWidth;
+          penguin.targetY = players[id].y * containerHeight;
+          penguin.name = players[id].name;
+          gameContainer.appendChild(penguin);
+          penguins[id] = penguin;
+        } else {
+          penguin.targetX = players[id].x * containerWidth;
+          penguin.targetY = players[id].y * containerHeight;
+        }
+
+        penguin.style.backgroundImage = players[id].isDancing ? dancingPenguin : normalPenguin;
+
+        const nameTag = penguin.querySelector('.nameTag');
+        nameTag.textContent = players[id].name || 'Penguin';
+
+        const speechBubble = penguin.querySelector('.speechBubble');
+        if (players[id].message) {
+          speechBubble.textContent = players[id].message;
+          speechBubble.style.display = 'block';
+          setTimeout(() => {
+            speechBubble.style.display = 'none';
+          }, 3000);
+        }
+      }
+    }
+
+    function animatePenguins(timestamp) {
+      const speed = 3; // pixels per frame, constant speed waddling
+
+      for (const id in penguins) {
+        const penguin = penguins[id];
+        if (penguin.targetX == null || penguin.targetY == null) continue;
+
+        const dx = penguin.targetX - penguin.currentX;
+        const dy = penguin.targetY - penguin.currentY;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance > 1) {
+          const angle = Math.atan2(dy, dx);
+          penguin.currentX += Math.cos(angle) * Math.min(speed, distance);
+          penguin.currentY += Math.sin(angle) * Math.min(speed, distance);
+          penguin.style.left = penguin.currentX + 'px';
+          penguin.style.top = penguin.currentY + 'px';
+        }
+      }
+      requestAnimationFrame(animatePenguins);
+    }
+
+    animatePenguins();
+
+    function send(action, data = {}) {
+      ws.send(JSON.stringify({ type: action, ...data }));
+    }
+
+    document.addEventListener('click', (e) => {
+      if (isBanned || e.target === chatInput || e.target === sendButton || e.target === danceButton) return;
+      const rect = gameContainer.getBoundingClientRect();
+      const normalizedX = (e.clientX - rect.left) / rect.width;
+      const normalizedY = (e.clientY - rect.top) / rect.height;
+      send('move', { x: normalizedX, y: normalizedY });
+    });
+
+    sendButton.addEventListener('click', () => {
+      if (isBanned) return;
+      const message = chatInput.value.trim();
+      if (message) {
+        const lowerMessage = message.toLowerCase();
+        const isSwear = swearWords.some(word => lowerMessage.includes(word));
+        if (isSwear) {
+          send('banned');
+        } else {
+          send('chat', { message });
+        }
+        chatInput.value = '';
+      }
+    });
+
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendButton.click();
+      }
+    });
+
+    danceButton.addEventListener('click', () => {
+      if (isBanned) return;
+      send('dance');
+    });
+
+    function showBanned() {
+      isBanned = true;
+      bannedOverlay.style.display = 'flex';
+      laughTrack.play();
+    }
+  </script>
+</body>
+</html>
