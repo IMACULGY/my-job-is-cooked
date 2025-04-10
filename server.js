@@ -1,6 +1,6 @@
-import WebSocket from 'ws';
+import { WebSocketServer } from 'ws';
 const port = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port });
+const wss = new WebSocketServer({ port });
 
 let clients = {};
 let clientId = 0;
@@ -20,7 +20,7 @@ function broadcastState() {
   }
   const message = JSON.stringify({ type: 'state', players });
   for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === 1) { // OPEN
       client.send(message);
     }
   }
