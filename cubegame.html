@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bouncing Cube Game</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #menuScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            color: white;
+            text-align: center;
+            transition: opacity 0.5s;
+        }
+        #menuScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #menuContent {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 600px;
+            backdrop-filter: blur(5px);
+        }
+        #startButton {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, background 0.2s;
+        }
+        #startButton:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .instruction {
+            margin: 10px 0;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .key-point {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        #speedControl {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        #scoreDisplay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            color: #333;
+            font-size: 18px;
+        }
+        #gameOver {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            display: none;
+            z-index: 1001;
+        }
+        #speedControl label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+        }
+        #speedSlider {
+            width: 250px;
+            margin-top: 5px;
+        }
+        #speedValue {
+            margin-left: 5px;
+            font-weight: bold;
+            color: #444;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: #ddd;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+        .sprite {
+            position: fixed;
+            pointer-events: none;
+            user-select: none;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: font-size 0.3s ease;
+        }
+        .emoji-sprite {
+            opacity: 0.6;
+            filter: brightness(0.8);
+            font-size: 40px;
+        }
+        .enemy-sprite {
+            filter: drop-shadow(0 0 10px red);
+            font-size: 40px;
+        }
+        .powerup-sprite {
+            filter: drop-shadow(0 0 10px gold);
+            font-size: 40px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="menuScreen">
+        <div id="menuContent">
+            <h1>Bouncing Cube Game</h1>
+            <div class="instruction">
+                <span class="key-point">Draw Lines:</span> Click and drag to create bouncing surfaces
+            </div>
+            <div class="instruction">
+                <span class="key-point">Collect Food:</span> Guide the cube to collect emoji food items
+            </div>
+            <div class="instruction">
+                <span class="key-point">Avoid Enemies:</span> Don't let the evil emojis touch your cube!
+            </div>
+            <div class="instruction">
+                <span class="key-point">Power-Ups:</span> Collect stars to become invincible and destroy enemies
+            </div>
+            <div class="instruction">
+                <span class="key-point">Watch Out:</span> Enemies grow larger and faster when they eat food!
+            </div>
+            <button id="startButton">Start Game</button>
+        </div>
+    </div>
+
+    <div id="speedControl">
+        <label for="speedSlider">Cube Speed: <span id="speedValue">1.0</span>x</label>
+        <input type="range" id="speedSlider" min="-10" max="10" step="0.1" value="1">
+    </div>
+    <div id="scoreDisplay">Score: <span id="score">0</span></div>
+    <div id="gameOver">
+        <h2>Game Over!</h2>
+        <p>Score: <span id="finalScore">0</span></p>
+        <p>Click anywhere to restart</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Add menu functionality
+        const menuScreen = document.getElementById('menuScreen');
+        const startButton = document.getElementById('startButton');
+        let gameStarted = false;
+
+        startButton.addEventListener('click', () => {
+            menuScreen.classList.add('hidden');
+            if (!gameStarted) {
+                gameStarted = true;
+                resetGame();
+            }
+        });
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const geometry = new THREE.BoxGeometry();
+        const material = new THREE.MeshPhongMaterial({ 
+            color: 0xff69b4,
+            shininess: 100,
+            emissive: 0x330033
+        });
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+
+        // Create glow effect
+        const glowGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const glowMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                time: { value: 0 },
+                color: { value: new THREE.Color(0xffffff) }
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float time;
+                uniform vec3 color;
+                varying vec3 vNormal;
+                void main() {
+                    float r = abs(sin(time * 2.0));
+                    float g = abs(sin(time * 2.0 + 2.094));
+                    float b = abs(sin(time * 2.0 + 4.189));
+                    float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 2.0);
+                    gl_FragColor = vec4(r, g, b, 1.0) * intensity;
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.scale.set(2, 2, 2);
+        glow.visible = false;
+        cube.add(glow);
+
+        const light = new THREE.DirectionalLight(0xffffff, 1.5);
+        light.position.set(1, 1, 1);
+        scene.add(light);
+        
+        const ambientLight = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xff69b4, 1, 10);
+        pointLight.position.copy(cube.position);
+        scene.add(pointLight);
+
+        camera.position.z = 15;
+
+        let emojis = [];
+        let enemies = [];
+        let powerups = [];
+        let score = 0;
+        let isGameOver = false;
+        let isPoweredUp = false;
+        let powerUpTimer = null;
+        let rainbowInterval = null;
+        const scoreDisplay = document.getElementById('score');
+        const gameOverDisplay = document.getElementById('gameOver');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const emojiList = ['🍕', '🍔', '🍟', '🌭', '🍿', '🧂', '🥨', '🥯', '🥖', '🥐'];
+        const enemyList = ['👿', '👻', '💀', '🤡', '👹'];
+
+        let isDrawing = false;
+        let startPoint = new THREE.Vector3();
+        let lines = [];
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+
+        function createEmoji() {
+            const emojiDiv = document.createElement('div');
+            emojiDiv.className = 'sprite emoji-sprite';
+            emojiDiv.textContent = emojiList[Math.floor(Math.random() * emojiList.length)];
+            document.body.appendChild(emojiDiv);
+
+            const boundaries = calculateBoundaries();
+            const position = {
+                x: (Math.random() * 2 - 1) * (boundaries.x - 1),
+                y: (Math.random() * 2 - 1) * (boundaries.y - 1),
+                z: 0
+            };
+
+            emojis.push({
+                element: emojiDiv,
+                position: position
+            });
+
+            updateSpritePosition(emojis[emojis.length - 1]);
+        }
+
+        function createPowerUp() {
+            if (powerups.length === 0 && !isPoweredUp) {
+                const powerupDiv = document.createElement('div');
+                powerupDiv.className = 'sprite powerup-sprite';
+                powerupDiv.textContent = '⭐';
+                document.body.appendChild(powerupDiv);
+
+                const boundaries = calculateBoundaries();
+                const position = {
+                    x: (Math.random() * 2 - 1) * (boundaries.x - 1),
+                    y: (Math.random() * 2 - 1) * (boundaries.y - 1),
+                    z: 0
+                };
+
+                powerups.push({
+                    element: powerupDiv,
+                    position: position
+                });
+
+                updateSpritePosition(powerups[powerups.length - 1]);
+            }
+        }
+
+        function createEnemy() {
+            const enemyDiv = document.createElement('div');
+            enemyDiv.className = 'sprite enemy-sprite';
+            enemyDiv.textContent = enemyList[Math.floor(Math.random() * enemyList.length)];
+            document.body.appendChild(enemyDiv);
+
+            const boundaries = calculateBoundaries();
+            const position = {
+                x: (Math.random() * 2 - 1) * (boundaries.x - 1),
+                y: (Math.random() * 2 - 1) * (boundaries.y - 1),
+                z: 0
+            };
+
+            const baseSpeed = 0.1;
+            enemies.push({
+                element: enemyDiv,
+                position: position,
+                velocity: {
+                    x: (Math.random() - 0.5) * baseSpeed,
+                    y: (Math.random() - 0.5) * baseSpeed
+                },
+                size: 1,
+                radius: 0.5,
+                speedMultiplier: 1
+            });
+
+            updateSpritePosition(enemies[enemies.length - 1]);
+        }
+
+        function startPowerUp() {
+            isPoweredUp = true;
+            if (rainbowInterval) clearInterval(rainbowInterval);
+            if (powerUpTimer) clearTimeout(powerUpTimer);
+
+            glow.visible = true;
+
+            // Rainbow color effect
+            let hue = 0;
+            rainbowInterval = setInterval(() => {
+                hue = (hue + 5) % 360;
+                cube.material.color.setHSL(hue/360, 1, 0.5);
+            }, 50);
+
+            // Power-up duration
+            powerUpTimer = setTimeout(() => {
+                isPoweredUp = false;
+                clearInterval(rainbowInterval);
+                cube.material.color.setHex(0xff69b4);
+                glow.visible = false;
+            }, 5000); // 5 seconds duration
+        }
+
+        function updateSpritePosition(sprite) {
+            const vector = new THREE.Vector3(sprite.position.x, sprite.position.y, sprite.position.z);
+            vector.project(camera);
+
+            const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+            sprite.element.style.left = x + 'px';
+            sprite.element.style.top = y + 'px';
+        }
+
+        function normalizeVector(vector) {
+            const length = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+            return { x: vector.x / length, y: vector.y / length };
+        }
+
+        function dotProduct(v1, v2) {
+            return v1.x * v2.x + v1.y * v2.y;
+        }
+
+        function reflect(velocity, normal) {
+            const dot = dotProduct(velocity, normal);
+            return {
+                x: velocity.x - 2 * dot * normal.x,
+                y: velocity.y - 2 * dot * normal.y
+            };
+        }
+
+        function getMousePosition(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2();
+            
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            const worldPos = new THREE.Vector3();
+            worldPos.x = mouse.x * (camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+            worldPos.y = mouse.y * (camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+            worldPos.z = 0;
+
+            return worldPos;
+        }
+
+        function checkLineIntersection(pos, nextPos, lineStart, lineEnd, radius = 0.5) {
+            const lineVector = {
+                x: lineEnd.x - lineStart.x,
+                y: lineEnd.y - lineStart.y
+            };
+
+            const posVector = {
+                x: pos.x - lineStart.x,
+                y: pos.y - lineStart.y
+            };
+
+            const lineLengthSq = lineVector.x * lineVector.x + lineVector.y * lineVector.y;
+            const t = Math.max(0, Math.min(1, (posVector.x * lineVector.x + posVector.y * lineVector.y) / lineLengthSq));
+
+            const closestPoint = {
+                x: lineStart.x + t * lineVector.x,
+                y: lineStart.y + t * lineVector.y
+            };
+
+            const distance = Math.sqrt(
+                Math.pow(pos.x - closestPoint.x, 2) + 
+                Math.pow(pos.y - closestPoint.y, 2)
+            );
+
+            if (distance < radius) {
+                const normal = normalizeVector({
+                    x: pos.x - closestPoint.x,
+                    y: pos.y - closestPoint.y
+                });
+
+                return {
+                    collision: true,
+                    point: closestPoint,
+                    normal: normal
+                };
+            }
+
+            return { collision: false };
+        }
+
+        function updateEnemies() {
+            const boundaries = calculateBoundaries();
+            
+            enemies.forEach(enemy => {
+                // Check for food collection
+                for (let i = emojis.length - 1; i >= 0; i--) {
+                    const emoji = emojis[i];
+                    const distance = Math.sqrt(
+                        Math.pow(enemy.position.x - emoji.position.x, 2) +
+                        Math.pow(enemy.position.y - emoji.position.y, 2)
+                    );
+
+                    if (distance < enemy.radius + 0.5) {
+                        enemy.size += 0.2;
+                        enemy.radius = 0.5 * enemy.size;
+                        enemy.element.style.fontSize = `${40 * enemy.size}px`;
+                        enemy.speedMultiplier += 0.1;
+                        
+                        document.body.removeChild(emoji.element);
+                        emojis.splice(i, 1);
+                        createEmoji();
+                    }
+                }
+
+                const nextPos = {
+                    x: enemy.position.x + enemy.velocity.x * enemy.speedMultiplier,
+                    y: enemy.position.y + enemy.velocity.y * enemy.speedMultiplier
+                };
+
+                // Check line collisions
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const line = lines[i];
+                    if (line.isTemporary) continue;
+
+                    const result = checkLineIntersection(
+                        enemy.position,
+                        nextPos,
+                        line.start,
+                        line.end,
+                        enemy.radius
+                    );
+
+                    if (result.collision) {
+                        const newVelocity = reflect(enemy.velocity, result.normal);
+                        enemy.velocity = newVelocity;
+                        
+                        scene.remove(line.line);
+                        lines.splice(i, 1);
+
+                        const baseSpeed = 0.1;
+                        const speed = baseSpeed / Math.sqrt(enemy.size);
+                        const magnitude = Math.sqrt(enemy.velocity.x * enemy.velocity.x + enemy.velocity.y * enemy.velocity.y);
+                        enemy.velocity.x = (enemy.velocity.x / magnitude) * speed;
+                        enemy.velocity.y = (enemy.velocity.y / magnitude) * speed;
+                        break;
+                    }
+                }
+
+                enemy.position.x += enemy.velocity.x * enemy.speedMultiplier;
+                enemy.position.y += enemy.velocity.y * enemy.speedMultiplier;
+
+                if (Math.abs(enemy.position.x) > boundaries.x) {
+                    enemy.velocity.x *= -1;
+                    enemy.position.x = Math.sign(enemy.position.x) * boundaries.x;
+                }
+                if (Math.abs(enemy.position.y) > boundaries.y) {
+                    enemy.velocity.y *= -1;
+                    enemy.position.y = Math.sign(enemy.position.y) * boundaries.y;
+                }
+
+                updateSpritePosition(enemy);
+            });
+        }
+
+        function checkCollisions() {
+            // Check food collection
+            for (let i = emojis.length - 1; i >= 0; i--) {
+                const emoji = emojis[i];
+                const distance = Math.sqrt(
+                    Math.pow(cube.position.x - emoji.position.x, 2) +
+                    Math.pow(cube.position.y - emoji.position.y, 2)
+                );
+
+                if (distance < 1) {
+                    document.body.removeChild(emoji.element);
+                    emojis.splice(i, 1);
+                    score += 10;
+                    scoreDisplay.textContent = score;
+                    createEmoji();
+                }
+            }
+
+            // Check power-up collection
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                const powerup = powerups[i];
+                const distance = Math.sqrt(
+                    Math.pow(cube.position.x - powerup.position.x, 2) +
+                    Math.pow(cube.position.y - powerup.position.y, 2)
+                );
+
+                if (distance < 1) {
+                    document.body.removeChild(powerup.element);
+                    powerups.splice(i, 1);
+                    startPowerUp();
+                }
+            }
+
+            // Check enemy collisions
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                const distance = Math.sqrt(
+                    Math.pow(cube.position.x - enemy.position.x, 2) +
+                    Math.pow(cube.position.y - enemy.position.y, 2)
+                );
+
+                if (distance < enemy.radius + 0.5) {
+                    if (isPoweredUp) {
+                        // Destroy enemy if powered up
+                        document.body.removeChild(enemy.element);
+                        enemies.splice(i, 1);
+                        score += 50;
+                        scoreDisplay.textContent = score;
+                    } else {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = score;
+            gameOverDisplay.style.display = 'block';
+        }
+
+        function resetGame() {
+            isGameOver = false;
+            isPoweredUp = false;
+            if (rainbowInterval) clearInterval(rainbowInterval);
+            if (powerUpTimer) clearTimeout(powerUpTimer);
+            
+            score = 0;
+            scoreDisplay.textContent = '0';
+            gameOverDisplay.style.display = 'none';
+
+            lines.forEach(line => scene.remove(line.line));
+            lines = [];
+
+            cube.position.set(0, 0, 0);
+            cube.material.color.setHex(0xff69b4);
+            glow.visible = false;
+            moveX = baseSpeed;
+            moveY = baseSpeed;
+
+            emojis.forEach(emoji => document.body.removeChild(emoji.element));
+            enemies.forEach(enemy => document.body.removeChild(enemy.element));
+            powerups.forEach(powerup => document.body.removeChild(powerup.element));
+            emojis = [];
+            enemies = [];
+            powerups = [];
+
+            for (let i = 0; i < 5; i++) {
+                createEmoji();
+            }
+            createEnemy();
+        }
+
+        renderer.domElement.addEventListener('mousedown', (event) => {
+            if (isGameOver) return;
+            isDrawing = true;
+            startPoint = getMousePosition(event);
+        });
+
+        renderer.domElement.addEventListener('mousemove', (event) => {
+            if (!isDrawing || isGameOver) return;
+            
+            const endPoint = getMousePosition(event);
+            
+            if (lines.length > 0 && lines[lines.length - 1].isTemporary) {
+                scene.remove(lines[lines.length - 1].line);
+                lines.pop();
+            }
+
+            const points = [];
+            points.push(startPoint.clone());
+            points.push(endPoint.clone());
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, lineMaterial);
+            scene.add(line);
+
+            lines.push({
+                line: line,
+                start: { x: startPoint.x, y: startPoint.y },
+                end: { x: endPoint.x, y: endPoint.y },
+                isTemporary: true
+            });
+        });
+
+        renderer.domElement.addEventListener('mouseup', (event) => {
+            if (!isDrawing || isGameOver) return;
+            isDrawing = false;
+
+            const endPoint = getMousePosition(event);
+
+            if (lines.length > 0 && lines[lines.length - 1].isTemporary) {
+                scene.remove(lines[lines.length - 1].line);
+                lines.pop();
+            }
+
+            const points = [];
+            points.push(startPoint.clone());
+            points.push(endPoint.clone());
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, lineMaterial);
+            scene.add(line);
+
+            lines.push({
+                line: line,
+                start: { x: startPoint.x, y: startPoint.y },
+                end: { x: endPoint.x, y: endPoint.y }
+            });
+        });
+
+        document.addEventListener('click', () => {
+            if (isGameOver) {
+                resetGame();
+            }
+        });
+
+        const baseSpeed = 0.1;
+        let speedMultiplier = 1;
+        let moveX = baseSpeed;
+        let moveY = baseSpeed;
+        let rotateSpeed = 0.02;
+
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+
+        speedSlider.addEventListener('input', function(e) {
+            speedMultiplier = parseFloat(e.target.value);
+            speedValue.textContent = speedMultiplier.toFixed(1);
+        });
+
+        function calculateBoundaries() {
+            const vFOV = THREE.MathUtils.degToRad(camera.fov);
+            const height = 2 * Math.tan(vFOV / 2) * camera.position.z;
+            const width = height * camera.aspect;
+            return {
+                x: width / 2 - 0.5,
+                y: height / 2 - 0.5
+            };
+        }
+
+        let boundaries = calculateBoundaries();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update glow effect
+            if (isPoweredUp) {
+                glowMaterial.uniforms.time.value += 0.016;
+            }
+
+            if (isGameOver) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            const nextPos = {
+                x: cube.position.x + moveX * speedMultiplier,
+                y: cube.position.y + moveY * speedMultiplier
+            };
+
+            pointLight.position.copy(cube.position);
+
+            let collision = false;
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i];
+                if (line.isTemporary) continue;
+                
+                const result = checkLineIntersection(
+                    { x: cube.position.x, y: cube.position.y },
+                    nextPos,
+                    line.start,
+                    line.end
+                );
+
+                if (result.collision) {
+                    const velocity = { x: moveX * speedMultiplier, y: moveY * speedMultiplier };
+                    const newVelocity = reflect(velocity, result.normal);
+                    
+                    moveX = newVelocity.x / speedMultiplier;
+                    moveY = newVelocity.y / speedMultiplier;
+
+                    scene.remove(line.line);
+                    lines.splice(i, 1);
+                    if (!isPoweredUp) changeCubeColor();
+                    
+                    collision = true;
+                    break;
+                }
+            }
+
+            if (!collision) {
+                cube.position.x = nextPos.x;
+                cube.position.y = nextPos.y;
+            }
+
+            cube.rotation.x += rotateSpeed * speedMultiplier;
+            cube.rotation.y += rotateSpeed * speedMultiplier;
+
+            if (Math.abs(cube.position.x) > boundaries.x) {
+                moveX = -moveX;
+                if (!isPoweredUp) changeCubeColor();
+            }
+            if (Math.abs(cube.position.y) > boundaries.y) {
+                moveY = -moveY;
+                if (!isPoweredUp) changeCubeColor();
+            }
+
+            updateEnemies();
+            checkCollisions();
+            emojis.forEach(updateSpritePosition);
+            powerups.forEach(updateSpritePosition);
+
+            renderer.render(scene, camera);
+        }
+
+        function changeCubeColor() {
+            const randomColor = Math.random() * 0xffffff;
+            cube.material.color.setHex(randomColor);
+        }
+
+        window.addEventListener('resize', onWindowResize, false);
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            boundaries = calculateBoundaries();
+            emojis.forEach(updateSpritePosition);
+            enemies.forEach(updateSpritePosition);
+            powerups.forEach(updateSpritePosition);
+        }
+
+        setInterval(() => {
+            if (!isGameOver) {
+                if (Math.random() < 0.1) { // 10% chance for enemy
+                    createEnemy();
+                }
+                if (Math.random() < 0.05) { // 5% chance for power-up
+                    createPowerUp();
+                }
+            }
+        }, 1000);
+
+        resetGame();
+        animate();
+    </script>
+</body>
+</html>
